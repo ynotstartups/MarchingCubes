@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <vector>
+#include <chrono>
 
 /* 
 	Simple test of the Marching Cubes code found in paulslib found here
@@ -11,13 +13,13 @@
 */
 
 typedef struct {
-   double x,y,z;
+   float x,y,z;
 } XYZ;
 
 typedef struct {
    XYZ p[8];
    XYZ n[8];
-   double val[8];
+   float val[8];
 } GRIDCELL;
 
 typedef struct {
@@ -29,8 +31,8 @@ typedef struct {
 #define ABS(x) (x < 0 ? -(x) : (x))
 
 // Prototypes
-int PolygoniseCube(GRIDCELL,double,TRIANGLE *);
-XYZ VertexInterp(double,XYZ,XYZ,double,double);
+int PolygoniseCube(GRIDCELL,float,TRIANGLE *);
+XYZ VertexInterp(float,XYZ,XYZ,float,float);
 
 #define NX 200
 #define NY 160
@@ -39,11 +41,13 @@ XYZ VertexInterp(double,XYZ,XYZ,double,double);
 int main(int argc,char **argv)
 {
 	int i,j,k,l,n,c;
-	short int ***data = NULL;
+    std::vector<std::vector<std::vector<short int> > > data(NX+1,
+            std::vector<std::vector<short int> >(NY+1, std::vector<short int>(NZ+1)));
 	short int isolevel = 128,themax = 0,themin = 255;
 	GRIDCELL grid;
 	TRIANGLE triangles[10];
 	TRIANGLE *tri = NULL;
+    std::vector<TRIANGLE> tris;
 	int ntri = 0;
 	FILE *fptr;
 
@@ -56,18 +60,22 @@ int main(int argc,char **argv)
 	}
 
 	// Parse the command line
+    /*
 	for (i=1;i<argc;i++) {
 		if (strcmp(argv[i],"-i") == 0)
 			isolevel = atof(argv[i+1]);
 	}
+    */
 
 	// Malloc the volumetric data, hardwired size!
+    /*
 	data = malloc(NX*sizeof(short int **));
 	for (i=0;i<NX;i++)
 		data[i] = malloc(NY*sizeof(short int *));
 	for (i=0;i<NX;i++)
 		for (j=0;j<NY;j++)
 			data[i][j] = malloc(NZ*sizeof(short int));
+    */
 
 	// Open and read the raw data
 	fprintf(stderr,"Reading data ...\n");
@@ -82,6 +90,7 @@ int main(int argc,char **argv)
 					fprintf(stderr,"Unexpected end of file\n");
 					exit(-1);
 				}
+                // fprintf(stderr,"%d %d %d\n", i, j ,k);
 				data[i][j][k] = c;
 				if (c > themax)
 					themax = c;
@@ -94,6 +103,7 @@ int main(int argc,char **argv)
 	fprintf(stderr,"Volumetric data range: %d -> %d\n",themin,themax);
 
 	// Polygonise the grid 
+    auto t1 = std::chrono::high_resolution_clock::now();
 	fprintf(stderr,"Polygonising data ...\n");
 	for (i=0;i<NX-1;i++) {
 		if (i % (NX/10) == 0)
@@ -106,7 +116,7 @@ int main(int argc,char **argv)
 				grid.val[0] = data[i][j][k];
             grid.p[1].x = i+1;
             grid.p[1].y = j;
-            grid.p[1].z = k; 
+            grid.p[1].z = k;
 				grid.val[1] = data[i+1][j][k];
             grid.p[2].x = i+1;
             grid.p[2].y = j+1;
@@ -133,13 +143,17 @@ int main(int argc,char **argv)
             grid.p[7].z = k+1;
 				grid.val[7] = data[i][j+1][k+1];
 				n = PolygoniseCube(grid,isolevel,triangles);
-				tri = realloc(tri,(ntri+n)*sizeof(TRIANGLE));
-				for (l=0;l<n;l++)
-					tri[ntri+l] = triangles[l];
+				// tri = realloc(tri,(ntri+n)*sizeof(TRIANGLE));
+				for (l=0;l<n;l++) {
+                    // tri[ntri+l] = triangles[l];
+                    tris.push_back(triangles[l]);
+                }
 				ntri += n;
 			}
 		}
 	}
+    auto t2 = std::chrono::high_resolution_clock::now();
+    fprintf(stderr, "f() took %d ms ", std::chrono::duration_cast<std::chrono::milliseconds>(t2-t1).count());
 	fprintf(stderr,"Total of %d triangles\n",ntri);
 
 	// Now do something with the triangles ....
@@ -152,7 +166,8 @@ int main(int argc,char **argv)
 	for (i=0;i<ntri;i++) {
       fprintf(fptr,"f3 ");
       for (k=0;k<3;k++)  {
-         fprintf(fptr,"%g %g %g ",tri[i].p[k].x,tri[i].p[k].y,tri[i].p[k].z);
+         // fprintf(fptr,"%g %g %g ",tri[i].p[k].x,tri[i].p[k].y,tri[i].p[k].z);
+         fprintf(fptr,"%g %g %g ",tris[i].p[k].x,tris[i].p[k].y,tris[i].p[k].z);
       }
 		fprintf(fptr,"0.5 0.5 0.5\n"); // colour
 	}
@@ -169,7 +184,7 @@ int main(int argc,char **argv)
    0 will be returned if the grid cell is either totally above
    of totally below the isolevel.
 */
-int PolygoniseCube(GRIDCELL g,double iso,TRIANGLE *tri)
+int PolygoniseCube(GRIDCELL g,float iso,TRIANGLE *tri)
 {
    int i,ntri = 0;
    int cubeindex;
@@ -593,9 +608,9 @@ int triTable[256][16] =
    Return the point between two points in the same ratio as
    isolevel is between valp1 and valp2
 */
-XYZ VertexInterp(double isolevel,XYZ p1,XYZ p2,double valp1,double valp2)
+XYZ VertexInterp(float isolevel,XYZ p1,XYZ p2,float valp1,float valp2)
 {
-   double mu;
+   float mu;
    XYZ p;
 
    if (ABS(isolevel-valp1) < 0.00001)
