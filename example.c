@@ -24,14 +24,12 @@ typedef struct {
 
 typedef struct {
    XYZ p[3];         /* Vertices */
-   XYZ c;            /* Centroid */
-   XYZ n[3];         /* Normal   */
 } TRIANGLE;
 
 #define ABS(x) (x < 0 ? -(x) : (x))
 
 // Prototypes
-int PolygoniseCube(GRIDCELL,float,TRIANGLE *);
+int PolygoniseCube(GRIDCELL g,float iso,std::vector<TRIANGLE>& tri);
 XYZ VertexInterp(float,XYZ,XYZ,float,float);
 
 #define NX 200
@@ -45,7 +43,7 @@ int main(int argc,char **argv)
             std::vector<std::vector<short int> >(NY+1, std::vector<short int>(NZ+1)));
 	short int isolevel = 128,themax = 0,themin = 255;
 	GRIDCELL grid;
-	TRIANGLE triangles[10];
+    std::vector<TRIANGLE> triangles(10);
 	TRIANGLE *tri = NULL;
     std::vector<TRIANGLE> tris;
 	int ntri = 0;
@@ -106,48 +104,45 @@ int main(int argc,char **argv)
     auto t1 = std::chrono::high_resolution_clock::now();
 	fprintf(stderr,"Polygonising data ...\n");
 	for (i=0;i<NX-1;i++) {
-		if (i % (NX/10) == 0)
-			fprintf(stderr,"   Slice %d of %d\n",i,NX);
 		for (j=0;j<NY-1;j++) {
 			for (k=0;k<NZ-1;k++) {
-				grid.p[0].x = i;
-				grid.p[0].y = j;
-         	grid.p[0].z = k;
-				grid.val[0] = data[i][j][k];
-            grid.p[1].x = i+1;
-            grid.p[1].y = j;
-            grid.p[1].z = k;
-				grid.val[1] = data[i+1][j][k];
-            grid.p[2].x = i+1;
-            grid.p[2].y = j+1;
-            grid.p[2].z = k;
-				grid.val[2] = data[i+1][j+1][k];
-            grid.p[3].x = i;
-            grid.p[3].y = j+1;
-            grid.p[3].z = k;
-				grid.val[3] = data[i][j+1][k];
-            grid.p[4].x = i;
-            grid.p[4].y = j;
-            grid.p[4].z = k+1;
-				grid.val[4] = data[i][j][k+1];
-            grid.p[5].x = i+1;
-            grid.p[5].y = j;
-            grid.p[5].z = k+1;
-				grid.val[5] = data[i+1][j][k+1];
-            grid.p[6].x = i+1;
-            grid.p[6].y = j+1;
-            grid.p[6].z = k+1;
-				grid.val[6] = data[i+1][j+1][k+1];
-            grid.p[7].x = i;
-            grid.p[7].y = j+1;
-            grid.p[7].z = k+1;
-				grid.val[7] = data[i][j+1][k+1];
-				n = PolygoniseCube(grid,isolevel,triangles);
+                grid.p[0].x = i;
+                grid.p[0].y = j;
+                grid.p[0].z = k;
+                grid.val[0] = data[i][j][k];
+                grid.p[1].x = i+1;
+                grid.p[1].y = j;
+                grid.p[1].z = k;
+                grid.val[1] = data[i+1][j][k];
+                grid.p[2].x = i+1;
+                grid.p[2].y = j+1;
+                grid.p[2].z = k;
+                grid.val[2] = data[i+1][j+1][k];
+                grid.p[3].x = i;
+                grid.p[3].y = j+1;
+                grid.p[3].z = k;
+                grid.val[3] = data[i][j+1][k];
+                grid.p[4].x = i;
+                grid.p[4].y = j;
+                grid.p[4].z = k+1;
+                grid.val[4] = data[i][j][k+1];
+                grid.p[5].x = i+1;
+                grid.p[5].y = j;
+                grid.p[5].z = k+1;
+                grid.val[5] = data[i+1][j][k+1];
+                grid.p[6].x = i+1;
+                grid.p[6].y = j+1;
+                grid.p[6].z = k+1;
+                grid.val[6] = data[i+1][j+1][k+1];
+                grid.p[7].x = i;
+                grid.p[7].y = j+1;
+                grid.p[7].z = k+1;
+                grid.val[7] = data[i][j+1][k+1];
+                n = PolygoniseCube(grid,isolevel,triangles);
 				// tri = realloc(tri,(ntri+n)*sizeof(TRIANGLE));
-				for (l=0;l<n;l++) {
-                    // tri[ntri+l] = triangles[l];
+                for (l=0;l<n;l++)
                     tris.push_back(triangles[l]);
-                }
+
 				ntri += n;
 			}
 		}
@@ -184,7 +179,7 @@ int main(int argc,char **argv)
    0 will be returned if the grid cell is either totally above
    of totally below the isolevel.
 */
-int PolygoniseCube(GRIDCELL g,float iso,TRIANGLE *tri)
+int PolygoniseCube(GRIDCELL g,float iso,std::vector<TRIANGLE>& tri)
 {
    int i,ntri = 0;
    int cubeindex;
@@ -222,7 +217,7 @@ int PolygoniseCube(GRIDCELL g,float iso,TRIANGLE *tri)
    |/       |/    |/       |/
    3--------2     *---2----*
 */
-int edgeTable[256]={
+const int edgeTable[256]={
 0x0  , 0x109, 0x203, 0x30a, 0x406, 0x50f, 0x605, 0x70c,
 0x80c, 0x905, 0xa0f, 0xb06, 0xc0a, 0xd03, 0xe09, 0xf00,
 0x190, 0x99 , 0x393, 0x29a, 0x596, 0x49f, 0x795, 0x69c,
@@ -279,7 +274,7 @@ int edgeTable[256]={
    Remember, each intersected edge contains only one surface vertex.  The
    vertex triples are listed in counter clockwise order for proper facing.
 */
-int triTable[256][16] =
+const int triTable[256][16] =
 {{-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
 {0, 8, 3, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
 {0, 1, 9, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
